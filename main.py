@@ -51,7 +51,7 @@ for track, laps in st.session_state.tracks.items():
             continue
         # Check fastest lap
         laptime = lap['laptime']
-        if fastest_lap is None or laptime is not None and laptime < fastest_lap[1]:
+        if laptime is not None and (fastest_lap is None or laptime < fastest_lap[1]):
             fastest_lap = (key, laptime)
 
         # Check fastest sectors
