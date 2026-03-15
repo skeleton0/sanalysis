@@ -18,9 +18,9 @@ def format_laptime(t):
     secs = t % 60
 
     if mins > 0:
-        return f"{mins}:{secs:2.3f}"
+        return f"{mins}:{secs:06.3f}"
     else:
-        return f"{secs:2.3f}"
+        return f"{secs:06.3f}"
 
 if "initialised" not in st.session_state:
     st.session_state.tracks = dict()
