@@ -11,6 +11,11 @@ import numpy as np
 from util import Track, Sector, parse_files
 
 TRACE_COLOURS = ['#ff4d6d', '#2de2e6', '#ffbd00', '#7cff6b', '#00c2ff']
+laptime_ratings = {
+        'Broadford': (60, 59),
+        'Phillip Island': (102, 100),
+        'Mac Park': (75, 73),
+        }
 def format_laptime(t):
     if t is None:
         return "None"
@@ -104,10 +109,21 @@ for track, fastest_data in fastest.items():
 
     trace_dataframe = pd.DataFrame(trace_rows, columns=('lat', 'lon', 'colour'))
 
+    # Add rating emoji to ideal lap
+    rating = ''
+    if track in laptime_ratings:
+        if fastest_data[1] >= laptime_ratings[track][0]:
+            rating = '🐢'
+        elif fastest_data[1] >= laptime_ratings[track][1]:
+            rating = '👍'
+        else:
+            rating = '🔥'
+
     display_data[track] = {'fastest_sector_rows': fastest_sector_rows,
                            'trace_dataframe': trace_dataframe,
                            'ideal_lap': format_laptime(fastest_data[1]),
                            'max_top_speed': fastest_data[0],
+                           'rating_emoji': rating,
                            }
 
 def on_change(track, key):
@@ -132,7 +148,7 @@ for track, dp in display_data.items():
         df = df.highlight_min(subset=[f'S{i+1}'], color=TRACE_COLOURS[i])
 
     with st.container():
-        st.header(f"{track.name} — :rainbow[{dp['ideal_lap']}]", divider="blue")
+        st.header(f"{track} — :rainbow[{dp['ideal_lap']}] {dp['rating_emoji']}", divider="blue")
         st.caption("Reference the map to check the sectors are correct. If you have a dodgy sector you can delete it by clicking the checkbox on the left side of the row, and the clicking the trash can at the top right of the table.")
         st.data_editor(df, hide_index=True, num_rows="delete", disabled=df.columns, on_change=on_change, key=key, args=[track, key], column_config=column_config)
 
