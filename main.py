@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-from util import Track, Sector, parse_files
+from util import parse_files
 
 TRACE_COLOURS = ['#ff4d6d', '#2de2e6', '#ffbd00', '#7cff6b', '#00c2ff']
 laptime_ratings = {
@@ -45,11 +45,11 @@ if st.session_state.file_change:
 
 # Find the fastest sectors
 fastest = dict()
-for track, laps in st.session_state.tracks.items():
+for track, trackdata in st.session_state.tracks.items():
     fastest_lap = None
-    fastest_sectors = [None] * track.sectors
+    fastest_sectors = [None] * len(trackdata['trackplan'])
     max_top_speed = (None, 0)
-    for key, lap in laps.items():
+    for key, lap in trackdata['laps'].items():
         if lap['top'] is not None and lap['top'] > max_top_speed[1]:
             max_top_speed = (key, lap['top'])
         if key in st.session_state.deleted_laps.setdefault(track, set()):
@@ -68,14 +68,13 @@ for track, laps in st.session_state.tracks.items():
                     fastest_sectors[s_no] = (key, sector.time)
 
     if None in fastest_sectors:
-        print(f"Don't have times for all sectors for {track.name}")
+        print(f"Don't have times for all sectors for {track}")
         continue
 
 
     ideal_lap = sum([t for _, t in fastest_sectors])
-    fastest_sectors.append(fastest_lap)
     fastest_sectors = [k for k, _ in fastest_sectors]
-    fastest[track] = (max_top_speed, ideal_lap, fastest_sectors)
+    fastest[track] = (max_top_speed, ideal_lap, fastest_sectors, fastest_lap)
     continue
 
 # Construct data for display
@@ -84,7 +83,7 @@ for track, fastest_data in fastest.items():
     # Create rows for fastest sector table
     fastest_sector_rows = []
     for lap_key in set(fastest_data[2]):
-        lap = st.session_state.tracks[track][lap_key]
+        lap = st.session_state.tracks[track]['laps'][lap_key]
         fastest_sector_lap = {
             'File': lap_key[0],
             'Lap': lap_key[1] + 1,
@@ -103,8 +102,9 @@ for track, fastest_data in fastest.items():
 
     # Create rows for trace map
     trace_rows = []
-    for i, key in enumerate(fastest_data[2][:track.sectors]):
-        for pos in st.session_state.tracks[track][key]['sectors'][i].trace:
+    num_sectors = len(st.session_state.tracks[track]['trackplan'])
+    for i, key in enumerate(fastest_data[2][:num_sectors]):
+        for pos in st.session_state.tracks[track]['laps'][key]['sectors'][i].trace:
             trace_rows.append((*pos, TRACE_COLOURS[i]))
 
     trace_dataframe = pd.DataFrame(trace_rows, columns=('lat', 'lon', 'colour'))
@@ -137,24 +137,30 @@ def on_change(track, key):
 # Display content
 
 for track, dp in display_data.items():
-    key = f"{track.name.replace(' ', '_')}{track.sectors}de"
+    key = f"{track.replace(' ', '_')}de"
+    num_sectors = len(st.session_state.tracks[track]['trackplan'])
 
     # Create column config
-    column_config = {f"S{i}": st.column_config.NumberColumn(format="%.3f") for i in range(1, track.sectors + 1)}
+    column_config = {f"S{i}": st.column_config.NumberColumn(format="%.3f") for i in range(1, num_sectors + 1)}
 
-    df = pd.DataFrame(dp['fastest_sector_rows']).style.highlight_min(subset=['Laptime'])
+    df = pd.DataFrame(dp['fastest_sector_rows']).style
 
-    for i in range(track.sectors):
+    for i in range(num_sectors):
         df = df.highlight_min(subset=[f'S{i+1}'], color=TRACE_COLOURS[i])
 
     with st.container():
         st.header(f"{track} — :rainbow[{dp['ideal_lap']}] {dp['rating_emoji']}", divider="blue")
-        st.caption("Reference the map to check the sectors are correct. If you have a dodgy sector you can delete it by clicking the checkbox on the left side of the row, and the clicking the trash can at the top right of the table.")
         st.data_editor(df, hide_index=True, num_rows="delete", disabled=df.columns, on_change=on_change, key=key, args=[track, key], column_config=column_config)
 
-        # Display top speed message
+        # Display additional data
+        bad_sectors = st.session_state.tracks[track]['bad_sectors']
+        fastest_lap = fastest[track][3]
         top_speed = dp['max_top_speed']
-        st.markdown(f"Highest speed reported was :orange[{top_speed[1]} km/h] — :grey[{top_speed[0][0]}, Lap {top_speed[0][1]}]")
+        st.markdown(
+                f"- Fastest actual lap was :orange[{format_laptime(fastest_lap[1])}]&emsp;:small[:grey[{fastest_lap[0][0]} -- Lap {fastest_lap[0][1]}]]\n"
+                f"- Highest speed reported was :orange[{top_speed[1]} km/h]&emsp;:small[:grey[{top_speed[0][0]} -- Lap {top_speed[0][1]}]]\n"
+                f"- :red[{bad_sectors}] invalid sectors were filtered out"
+                )
 
         # Display map
         st.map(dp['trace_dataframe'], color="colour", size=1)
